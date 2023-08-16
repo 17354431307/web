@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"reflect"
+	"regexp"
 	"testing"
 )
 
@@ -30,6 +31,10 @@ func TestRouter_addRoute(t *testing.T) {
 		{
 			method: http.MethodGet,
 			path:   "/order/detail",
+		},
+		{
+			method: http.MethodGet,
+			path:   "/order/detail/:id",
 		},
 		{
 			method: http.MethodGet,
@@ -87,6 +92,10 @@ func TestRouter_addRoute(t *testing.T) {
 							"detail": {
 								path:    "detail",
 								handler: mockHandler,
+								paramsChild: &node{
+									path:    ":id",
+									handler: mockHandler,
+								},
 							},
 						},
 						starChild: &node{
@@ -155,6 +164,19 @@ func TestRouter_addRoute(t *testing.T) {
 
 	// 可用的 http method, 要不要检验
 	// mockHandler 为 nil
+
+	r = NewRouter()
+	r.addRoute(http.MethodGet, "/a/*", mockHandler)
+	assert.Panicsf(t, func() {
+		r.addRoute(http.MethodGet, "/a/:id", mockHandler)
+	}, "web: 不允许同时注册路径参数和通配符匹配, 已有通配符匹配")
+
+	r = NewRouter()
+	r.addRoute(http.MethodGet, "/a/:id", mockHandler)
+	assert.Panicsf(t, func() {
+		r.addRoute(http.MethodGet, "/a/*", mockHandler)
+	}, "web: 不允许同时注册路径参数和通配符匹配, 有参数路径匹配")
+
 }
 
 func TestRouter_findRoute(t *testing.T) {
@@ -182,10 +204,12 @@ func TestRouter_findRoute(t *testing.T) {
 			method: http.MethodGet,
 			path:   "/order/detail",
 		},
+
 		{
 			method: http.MethodGet,
 			path:   "/order/*",
 		},
+
 		{
 			method: http.MethodPost,
 			path:   "/order/create",
@@ -193,6 +217,10 @@ func TestRouter_findRoute(t *testing.T) {
 		{
 			method: http.MethodPost,
 			path:   "/login",
+		},
+		{
+			method: http.MethodPost,
+			path:   "/login/:username",
 		},
 	}
 
@@ -209,7 +237,7 @@ func TestRouter_findRoute(t *testing.T) {
 		path   string
 
 		wantFound bool
-		wantNode  *node
+		info      *matchInfo
 	}{
 		{
 			// 方法不存在
@@ -217,9 +245,11 @@ func TestRouter_findRoute(t *testing.T) {
 			method:    http.MethodOptions,
 			path:      "/order/detail",
 			wantFound: false,
-			wantNode: &node{
-				handler: mockHandleFunc,
-				path:    "detail",
+			info: &matchInfo{
+				node: &node{
+					handler: mockHandleFunc,
+					path:    "detail",
+				},
 			},
 		},
 		{
@@ -228,9 +258,11 @@ func TestRouter_findRoute(t *testing.T) {
 			method:    http.MethodGet,
 			path:      "/order/detail",
 			wantFound: true,
-			wantNode: &node{
-				handler: mockHandleFunc,
-				path:    "detail",
+			info: &matchInfo{
+				node: &node{
+					handler: mockHandleFunc,
+					path:    "detail",
+				},
 			},
 		},
 		{
@@ -239,9 +271,11 @@ func TestRouter_findRoute(t *testing.T) {
 			method:    http.MethodGet,
 			path:      "/order/abc",
 			wantFound: true,
-			wantNode: &node{
-				handler: mockHandleFunc,
-				path:    "*",
+			info: &matchInfo{
+				node: &node{
+					handler: mockHandleFunc,
+					path:    "*",
+				},
 			},
 		},
 		{
@@ -250,12 +284,14 @@ func TestRouter_findRoute(t *testing.T) {
 			method:    http.MethodGet,
 			path:      "/order",
 			wantFound: true,
-			wantNode: &node{
-				path: "order",
-				children: map[string]*node{
-					"detail": &node{
-						handler: mockHandleFunc,
-						path:    "detail",
+			info: &matchInfo{
+				node: &node{
+					path: "order",
+					children: map[string]*node{
+						"detail": &node{
+							handler: mockHandleFunc,
+							path:    "detail",
+						},
 					},
 				},
 			},
@@ -266,9 +302,11 @@ func TestRouter_findRoute(t *testing.T) {
 			method:    http.MethodDelete,
 			path:      "/",
 			wantFound: true,
-			wantNode: &node{
-				path:    "/",
-				handler: mockHandleFunc,
+			info: &matchInfo{
+				node: &node{
+					path:    "/",
+					handler: mockHandleFunc,
+				},
 			},
 		},
 		{
@@ -277,20 +315,48 @@ func TestRouter_findRoute(t *testing.T) {
 			method: http.MethodGet,
 			path:   "/aaaabbbccc",
 		},
+		{
+			// username 参数匹配
+			name:      "login username",
+			method:    http.MethodPost,
+			path:      "/login/hexiaowen",
+			wantFound: true,
+			info: &matchInfo{
+				node: &node{
+					path:    ":username",
+					handler: mockHandleFunc,
+				},
+				pathParams: map[string]string{
+					"username": "hexiaowen",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
-			n, found := r.findRoute(tc.method, tc.path)
+			info, found := r.findRoute(tc.method, tc.path)
 			assert.Equal(t, tc.wantFound, found)
 			if !found {
 				return
 			}
-			assert.Equal(t, tc.wantNode.path, n.path)
-			msg, ok := tc.wantNode.equal(n)
+
+			assert.Equal(t, tc.info.pathParams, info.pathParams)
+			msg, ok := tc.info.node.equal(info.node)
 			assert.True(t, ok, msg)
 		})
 	}
+}
+
+func TestReg(t *testing.T) {
+	reg := regexp.MustCompile(`:(\w+)(?:\((\w+)\))?`)
+	data1 := ":id"
+	ret1 := reg.FindStringSubmatch(data1)
+	t.Log(ret1, len(ret1))
+
+	data2 := ":(paramName"
+	ret2 := reg.FindStringSubmatch(data2)
+	t.Log(ret2)
 }
 
 // string 返回一个错误信息, 帮助我们排查问题
@@ -320,6 +386,13 @@ func (n *node) equal(y *node) (string, bool) {
 
 	if n.starChild != nil {
 		msg, ok := n.starChild.equal(y.starChild)
+		if !ok {
+			return msg, ok
+		}
+	}
+
+	if n.paramsChild != nil {
+		msg, ok := n.paramsChild.equal(y.paramsChild)
 		if !ok {
 			return msg, ok
 		}
