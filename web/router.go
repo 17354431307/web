@@ -49,6 +49,7 @@ func (r *router) addRoute(method string, path string, handleFunc HandleFunc) {
 			panic("web: 路由冲突, 重复注册[/]")
 		}
 		root.handler = handleFunc
+		root.route = "/"
 		return
 	}
 
@@ -75,6 +76,7 @@ func (r *router) addRoute(method string, path string, handleFunc HandleFunc) {
 		panic(fmt.Sprintf("web: 路由冲突[%s]", path))
 	}
 	root.handler = handleFunc
+	root.route = path
 }
 
 func (r *router) findRoute(method string, path string) (*matchInfo, bool) {
@@ -131,8 +133,9 @@ const (
 )
 
 type node struct {
-	typ  nodeType
-	path string
+	route string
+	typ   nodeType
+	path  string
 	// 缺一个代表用户注册的业务逻辑
 	handler HandleFunc
 

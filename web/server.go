@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 )
@@ -25,30 +26,95 @@ type Server interface {
 	// 这种允许注册多个, 没有必要提供
 	// 让用户自己去管
 	//addRoute1(method string, path string, handlesFunc ...HandleFunc)
+
 }
 
 //type HTTPSServer struct {
 //	HTTPServer
 //}
 
+// TODO 采用的是 options 模式, 也是无侵入式的, 牛逼, 必须得吃透
+type HTTPServerOption func(server *HTTPServer)
+
 type HTTPServer struct {
 	router
+	mdls []Middleware
+
+	log func(msg string, args ...any)
 }
 
-func NewHTTPServer() *HTTPServer {
-	return &HTTPServer{
+// 另外一种方案, 我不喜欢, 缺乏扩展性
+//func NewHTTPServer(mdls ...Middleware) *HTTPServer {
+//	res := &HTTPServer{
+//		router: NewRouter(),
+//		mdls:   mdls,
+//	}
+//	return res
+//}
+
+func NewHTTPServer(opts ...HTTPServerOption) *HTTPServer {
+	res := &HTTPServer{
 		router: NewRouter(),
+		log: func(msg string, args ...any) {
+			fmt.Printf(msg, args...)
+		},
+	}
+	for _, opt := range opts {
+		opt(res)
+	}
+	return res
+}
+
+func ServerWithMiddleware(mdls ...Middleware) HTTPServerOption {
+	return func(server *HTTPServer) {
+		server.mdls = mdls
 	}
 }
 
-// ServerHTTP 处理请求的入口
+// ServeHTTP 处理请求的入口
 func (h *HTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	// 你的框架代码在这里
 	ctx := &Context{
 		Req:  request,
 		Resp: writer,
 	}
-	h.serve(ctx)
+	//h.serve(ctx)
+
+	// 这里构造链条非常经典
+
+	// 最后一个是这个
+	root := h.serve
+
+	// 然后这里就是利用最后一个不同往前回溯组装链条
+	// 从后往前, 把后一个作为前一个的参数(next) 构造好链条
+	for i := len(h.mdls) - 1; i >= 0; i-- {
+		root = h.mdls[i](root)
+	}
+
+	// 这里执行的时候, 就是从前往后了
+	// 这里最后一个步骤, 就是把 RespData 和 RespStatusCode 刷新到响应里面
+
+	var m Middleware = func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			// 这一步就设置好了 RespData 和 RespStatusCode
+			next(ctx)
+
+			// 这里就相当于最后执行
+			h.flashResp(ctx)
+		}
+	}
+	root = m(root)
+	root(ctx)
+}
+
+func (h *HTTPServer) flashResp(ctx *Context) {
+	if ctx.RespStatusCode != 0 {
+		ctx.Resp.WriteHeader(ctx.RespStatusCode)
+	}
+	n, err := ctx.Resp.Write(ctx.RespData)
+	if err != nil || n != len(ctx.RespData) {
+		h.log("写入响应数据失败 %v", err)
+	}
 }
 
 func (h *HTTPServer) serve(ctx *Context) {
@@ -56,12 +122,14 @@ func (h *HTTPServer) serve(ctx *Context) {
 	info, ok := h.findRoute(ctx.Req.Method, ctx.Req.URL.Path)
 	if !ok || info.node.handler == nil {
 		// 路由没有命中
-		ctx.Resp.WriteHeader(http.StatusNotFound)
-		ctx.Resp.Write([]byte("NOT FOUND"))
+		ctx.RespStatusCode = 404
+		ctx.RespData = []byte("Not Found")
+
 		return
 	}
 
 	ctx.PathParams = info.pathParams
+	ctx.MatchedRoute = info.node.route
 	info.node.handler(ctx)
 }
 

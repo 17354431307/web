@@ -12,11 +12,22 @@ import (
 // 解决大多数人的需求
 
 type Context struct {
-	Req        *http.Request
-	Resp       http.ResponseWriter
+	Req *http.Request
+
+	// Resp 如果用户直接使用这个
+	// 那么他们就绕开了 RespData 和 RespStatusCode 这两个
+	// 那么部分 middleware 无法运作
+	Resp http.ResponseWriter
+
+	// 这个注意是为了给 middleware 读写用的
+	RespData       []byte
+	RespStatusCode int
+
 	PathParams map[string]string
 
 	queryValues url.Values
+
+	MatchedRoute string
 }
 
 func (c *Context) RespJSON(status int, val any) error {
@@ -26,8 +37,10 @@ func (c *Context) RespJSON(status int, val any) error {
 	}
 
 	c.Resp.WriteHeader(status)
-	c.Resp.Header().Set("Content-Type", "application/json")
-	c.Resp.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	//c.Resp.Header().Set("Content-Type", "application/json")
+	//c.Resp.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	c.RespData = data
+	c.RespStatusCode = status
 	_, err = c.Resp.Write(data)
 	return err
 }
