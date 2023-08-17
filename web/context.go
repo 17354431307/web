@@ -37,12 +37,11 @@ func (c *Context) RespJSON(status int, val any) error {
 	}
 
 	c.Resp.WriteHeader(status)
-	//c.Resp.Header().Set("Content-Type", "application/json")
+	c.Resp.Header().Set("Content-Type", "application/json")
 	//c.Resp.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	c.RespData = data
 	c.RespStatusCode = status
-	_, err = c.Resp.Write(data)
-	return err
+	return nil
 }
 
 func (c *Context) RespJSONOK(val any) error {
