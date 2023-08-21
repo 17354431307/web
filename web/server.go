@@ -21,7 +21,7 @@ type Server interface {
 	// method 是 HTTP 方法
 	// path 是路径
 	// handleFunc 是业务逻辑
-	addRoute(method string, path string, handleFunc HandleFunc)
+	addRoute(method string, path string, handleFunc HandleFunc, mdls ...Middleware)
 
 	// 这种允许注册多个, 没有必要提供
 	// 让用户自己去管
@@ -118,19 +118,38 @@ func (h *HTTPServer) flashResp(ctx *Context) {
 }
 
 func (h *HTTPServer) serve(ctx *Context) {
+	// before route
+
 	// 接下来查找路由并且执行命中的业务逻辑
 	info, ok := h.findRoute(ctx.Req.Method, ctx.Req.URL.Path)
-	if !ok || info.node.handler == nil {
-		// 路由没有命中
-		ctx.RespStatusCode = 404
-		ctx.RespData = []byte("Not Found")
+	// after route
 
-		return
+	var root HandleFunc = func(ctx *Context) {
+		if !ok || info.node.handler == nil {
+			// 路由没有命中
+			ctx.RespStatusCode = 404
+			ctx.RespData = []byte("Not Found")
+
+			return
+		}
+
+		ctx.PathParams = info.pathParams
+		ctx.MatchedRoute = info.node.route
+		// before execute
+		info.node.handler(ctx)
+		// after execute
 	}
 
-	ctx.PathParams = info.pathParams
-	ctx.MatchedRoute = info.node.route
-	info.node.handler(ctx)
+	// 构建路由级别的中间件
+	mdls := info.mdls
+	for i := len(mdls) - 1; i >= 0; i-- {
+		root = mdls[i](root)
+	}
+	root(ctx)
+}
+
+func (h *HTTPServer) Use(method string, path string, mdls ...Middleware) {
+	h.addRoute(method, path, nil, mdls...)
 }
 
 //func (h *HTTPServer) addRoute(method string, path string, handleFunc HandleFunc) {

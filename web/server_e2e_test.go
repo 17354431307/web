@@ -4,6 +4,7 @@ package web
 
 import (
 	"fmt"
+	"log"
 	"testing"
 )
 
@@ -68,4 +69,52 @@ func TestServer(t *testing.T) {
 	// 用户二, 手动管
 	h.Start(":8081")
 
+}
+
+func TestServer2(t *testing.T) {
+	type User struct {
+		Name string
+	}
+
+	server := NewHTTPServer()
+
+	server.Use("GET", "/a", func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			log.Println("我是 /a 的中间件")
+			next(ctx)
+		}
+	})
+
+	server.Use("GET", "/a/*", func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			log.Println("我是 /a/* 的中间件")
+			next(ctx)
+		}
+	})
+	server.Use("GET", "/a/b", func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			log.Println("我是 /a/b 的中间件")
+			next(ctx)
+		}
+	})
+
+	server.Use("GET", "/a/b/*", func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			log.Println("我是 /a/b/* 的中间件")
+			next(ctx)
+		}
+	})
+
+	server.Get("/a/b/c", func(ctx *Context) {
+		ctx.RespJSONOK(User{
+			Name: "何小文",
+		})
+	})
+	server.Get("/user", func(ctx *Context) {
+		ctx.RespJSONOK(User{
+			Name: "王辰",
+		})
+	})
+
+	server.Start(":8081")
 }

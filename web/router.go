@@ -24,7 +24,7 @@ func NewRouter() router {
 
 // 加一些限制:
 // path 必须以 / 开头, 不能以 / 结尾, 中间也不能有连续的 //, 不能为空
-func (r *router) addRoute(method string, path string, handleFunc HandleFunc) {
+func (r *router) addRoute(method string, path string, handleFunc HandleFunc, mdls ...Middleware) {
 	if path == "" {
 		panic("path 不能为空")
 	}
@@ -49,6 +49,7 @@ func (r *router) addRoute(method string, path string, handleFunc HandleFunc) {
 			panic("web: 路由冲突, 重复注册[/]")
 		}
 		root.handler = handleFunc
+		root.mdls = mdls
 		root.route = "/"
 		return
 	}
@@ -76,6 +77,7 @@ func (r *router) addRoute(method string, path string, handleFunc HandleFunc) {
 		panic(fmt.Sprintf("web: 路由冲突[%s]", path))
 	}
 	root.handler = handleFunc
+	root.mdls = mdls
 	root.route = path
 }
 
@@ -88,17 +90,18 @@ func (r *router) findRoute(method string, path string) (*matchInfo, bool) {
 
 	// 根节点特殊处理
 	if path == "/" {
-		return &matchInfo{node: root}, true
+		return &matchInfo{node: root, mdls: root.mdls}, true
 	}
 
 	// 这里把前置和后置的 / 都去掉
 	segs := strings.Split(strings.Trim(path, "/"), "/")
 	mi := &matchInfo{}
+	cur := root
 	for _, seg := range segs {
-		child, ok := root.childOf(seg)
+		child, ok := cur.childOf(seg)
 		if !ok {
 			if root.typ == nodeTypeAny {
-				mi.node = root
+				mi.node = cur
 				return mi, true
 			}
 
@@ -110,13 +113,81 @@ func (r *router) findRoute(method string, path string) (*matchInfo, bool) {
 			mi.addValue(child.paramName, seg)
 		}
 
-		root = child
+		cur = child
 	}
 	// 代表我确实有这个节点
 	// 但是节点是不是用户注册的有 handler 的, 就不一定了
 
-	mi.node = root
+	mi.mdls = r.findMdls(root, segs)
+	mi.node = cur
 	return mi, true
+}
+
+//func (r *router) findMdls(root *node, segs []string) []Middleware {
+//
+//	mdls := []Middleware{}
+//
+//	queue := list.New()
+//	queue.PushBack(root)
+//	for _, seg := range segs {
+//		// 一层一层的处理
+//		l := queue.Len()
+//		for l > 0 {
+//			element := queue.Front()
+//			queue.Remove(element)
+//			node := element.Value.(*node)
+//			if node.mdls != nil {
+//				mdls = append(mdls, node.mdls...)
+//			}
+//
+//			// 先从通配符匹配
+//			if node.starChild != nil {
+//				queue.PushBack(node.starChild)
+//			}
+//
+//			// 静态节点找
+//			child, ok := node.children[seg]
+//			if ok {
+//				queue.PushBack(child)
+//			}
+//
+//			l--
+//		}
+//	}
+//
+//	if queue.Len() > 0 {
+//		for element := queue.Front(); element != nil; element = element.Next() {
+//			node := element.Value.(*node)
+//			if node.mdls != nil {
+//				mdls = append(mdls, node.mdls...)
+//			}
+//		}
+//	}
+//	return mdls
+//}
+
+func (r *router) findMdls(root *node, segs []string) []Middleware {
+	queue := []*node{root}
+	res := make([]Middleware, 0, 16)
+	for i := 0; i < len(segs); i++ {
+		seg := segs[i]
+		var children []*node
+		for _, cur := range queue {
+			if len(cur.mdls) > 0 {
+				res = append(res, cur.mdls...)
+			}
+
+			children = append(children, cur.childrenOf(seg)...)
+		}
+		queue = children
+	}
+
+	for _, cur := range queue {
+		if len(cur.mdls) > 0 {
+			res = append(res, cur.mdls...)
+		}
+	}
+	return res
 }
 
 type nodeType int
@@ -155,6 +226,31 @@ type node struct {
 	// 正则表达式
 	regChild *node
 	regExpr  *regexp.Regexp
+
+	// 中间件
+	mdls []Middleware
+}
+
+func (n *node) childrenOf(path string) []*node {
+	res := make([]*node, 0, 4)
+	var static *node
+	if n.children != nil {
+		static = n.children[path]
+	}
+
+	if n.starChild != nil {
+		res = append(res, n.starChild)
+	}
+
+	if n.paramsChild != nil {
+		res = append(res, n.paramsChild)
+	}
+
+	if static != nil {
+		res = append(res, static)
+	}
+
+	return res
 }
 
 // 返回值是正确的子节点
@@ -181,7 +277,7 @@ func (n *node) ChildOrCreate(path string) *node {
 	if path[0] == ':' {
 		parseName, expr, isReg := n.parseParam(path)
 		if isReg {
-			n.childOrCreateReg(path, expr, parseName)
+			return n.childOrCreateReg(path, expr, parseName)
 		}
 
 		return n.childOrCreateParam(path, parseName)
@@ -307,6 +403,7 @@ func (n *node) childOfNonStatic(path string) (*node, bool) {
 type matchInfo struct {
 	node       *node
 	pathParams map[string]string
+	mdls       []Middleware
 }
 
 func (m *matchInfo) addValue(key string, value string) {

@@ -2,11 +2,12 @@ package web
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"reflect"
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRouter_addRoute(t *testing.T) {
@@ -359,6 +360,68 @@ func TestReg(t *testing.T) {
 	t.Log(ret2)
 }
 
+func TestRouter_addRoute_MiddleWare(t *testing.T) {
+	r := NewRouter()
+
+	var mdl Middleware = func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			t.Log("middleware1")
+			next(ctx)
+		}
+	}
+	var mockHandle HandleFunc = func(ctx *Context) {}
+
+	r.addRoute(http.MethodGet, "/a/b", mockHandle, mdl)
+	r.addRoute(http.MethodGet, "/", mockHandle, mdl)
+
+	wantRouter := &router{
+		trees: map[string]*node{
+			http.MethodGet: &node{
+				path: "/",
+				children: map[string]*node{
+					"a": &node{
+						path: "a",
+						children: map[string]*node{
+							"b": &node{
+								path:    "b",
+								handler: mockHandle,
+								typ:     nodeTypeStatic,
+								mdls:    []Middleware{mdl},
+							},
+						},
+						typ: nodeTypeStatic,
+					},
+				},
+				mdls:    []Middleware{mdl},
+				handler: mockHandle,
+			},
+		},
+	}
+
+	msg, ok := r.equal(wantRouter)
+	assert.True(t, ok, msg)
+}
+
+func TestNode_findMdls(t *testing.T) {
+	var mdl Middleware = func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			fmt.Println("123")
+		}
+	}
+	r := NewRouter()
+	var mockHandle HandleFunc = func(ctx *Context) {}
+	r.addRoute(http.MethodGet, "/", mockHandle, mdl)
+	r.addRoute(http.MethodGet, "/a/b", mockHandle, mdl)
+	r.addRoute(http.MethodGet, "/a/c", mockHandle)
+	r.addRoute(http.MethodGet, "/a/*", mockHandle, mdl)
+	r.addRoute(http.MethodGet, "/a/b/*", mockHandle, mdl)
+
+	root, _ := r.trees[http.MethodGet]
+	segs := []string{"a", "b", "c"}
+	mdls := r.findMdls(root, segs)
+	assert.Equal(t, len(mdls), 4)
+}
+
 // string 返回一个错误信息, 帮助我们排查问题
 // bool 代表是否真的相等
 func (r *router) equal(y *router) (string, bool) {
@@ -380,6 +443,11 @@ func (n *node) equal(y *node) (string, bool) {
 	if n.path != y.path {
 		return fmt.Sprintf("节点路径不匹配"), false
 	}
+
+	if n.typ != y.typ {
+		return fmt.Sprintf("节点类型不匹配"), false
+	}
+
 	if len(n.children) != len(y.children) {
 		return fmt.Sprintf("子节点数量不相等"), false
 	}
@@ -413,6 +481,18 @@ func (n *node) equal(y *node) (string, bool) {
 		msg, ok := c.equal(dst)
 		if !ok {
 			return msg, ok
+		}
+	}
+
+	// 比较 mdls
+	if len(n.mdls) != len(y.mdls) {
+		return fmt.Sprintf("middleware 数量不相等"), false
+	}
+	for i := range n.mdls {
+		nMdl := reflect.ValueOf(n.mdls[i])
+		yMdl := reflect.ValueOf(y.mdls[i])
+		if nMdl != yMdl {
+			return fmt.Sprintf("middleware 不相等"), false
 		}
 	}
 
