@@ -41,6 +41,8 @@ type HTTPServer struct {
 	mdls []Middleware
 
 	log func(msg string, args ...any)
+
+	tplEngine TemplateEngine
 }
 
 // 另外一种方案, 我不喜欢, 缺乏扩展性
@@ -65,6 +67,12 @@ func NewHTTPServer(opts ...HTTPServerOption) *HTTPServer {
 	return res
 }
 
+func ServerWithTemplateEngine(tpl TemplateEngine) HTTPServerOption {
+	return func(server *HTTPServer) {
+		server.tplEngine = tpl
+	}
+}
+
 func ServerWithMiddleware(mdls ...Middleware) HTTPServerOption {
 	return func(server *HTTPServer) {
 		server.mdls = mdls
@@ -75,8 +83,9 @@ func ServerWithMiddleware(mdls ...Middleware) HTTPServerOption {
 func (h *HTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	// 你的框架代码在这里
 	ctx := &Context{
-		Req:  request,
-		Resp: writer,
+		Req:       request,
+		Resp:      writer,
+		tplEngine: h.tplEngine,
 	}
 	//h.serve(ctx)
 
