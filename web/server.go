@@ -132,16 +132,13 @@ func (h *HTTPServer) serve(ctx *Context) {
 	// 接下来查找路由并且执行命中的业务逻辑
 	info, ok := h.findRoute(ctx.Req.Method, ctx.Req.URL.Path)
 	// after route
-
+	if !ok || info.node.handler == nil {
+		// 路由没有命中
+		ctx.RespStatusCode = 404
+		ctx.RespData = []byte("Not Found")
+		return
+	}
 	var root HandleFunc = func(ctx *Context) {
-		if !ok || info.node.handler == nil {
-			// 路由没有命中
-			ctx.RespStatusCode = 404
-			ctx.RespData = []byte("Not Found")
-
-			return
-		}
-
 		ctx.PathParams = info.pathParams
 		ctx.MatchedRoute = info.node.route
 		// before execute
