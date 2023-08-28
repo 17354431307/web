@@ -3,6 +3,11 @@
 package opentelemetry
 
 import (
+	"log"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/Moty1999/web/web"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -11,10 +16,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
-	"log"
-	"os"
-	"testing"
-	"time"
 )
 
 func TestMiddleWareBuild_Build(t *testing.T) {

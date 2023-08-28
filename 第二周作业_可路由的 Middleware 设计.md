@@ -171,6 +171,82 @@ func (r *router) findMdls(root *node, segs []string) []Middleware {
 注意到，在这里我们每次路由匹配的时候都是重新算了一下 `mi.mds`。实际上这个部分有两种优化手段：
 
 + 提前计算：在服务器启动的时候提前计算好所有叶子节点的 mdls，也就是提前按照层次遍历，为每一个有 `handler` 的节点提前计算好 mdls。路由查找的时候就可以避免重复遍历.
+  ```go
+  // calculateRouteMdls 计算路由的 midls
+  func (r *router) calculateRouteMdls() {
+  	var fn func(root *route)
+  	fn = func(root *route) {
+  		queue := make([]*route, 0, 20)
+  		queue = append(queue, root)
+  
+  		for len(queue) > 0 {
+  			nextQueue := []*route{}
+  			for _, cur := range queue {
+  				mdls := []Middleware{}
+  				if cur.anyChild != nil {
+  					mdls = append(mdls, cur.anyChild.mdls...)
+  
+  					tempSlice := make([]Middleware, 0, len(cur.anyChild.mdls)+len(cur.mdls))
+  					tempSlice = append(tempSlice, cur.mdls...)
+  					tempSlice = append(tempSlice, cur.anyChild.mdls...)
+  					cur.anyChild.mdls = tempSlice
+  
+  					nextQueue = append(nextQueue, cur.anyChild)
+  				}
+  
+  				if cur.paramChild != nil {
+  					mdls = append(mdls, cur.paramChild.mdls...)
+  
+  					tempSlice := make([]Middleware, 0, len(cur.paramChild.mdls)+len(cur.mdls))
+  					tempSlice = append(tempSlice, cur.mdls...)
+  					tempSlice = append(tempSlice, cur.paramChild.mdls...)
+  					cur.paramChild.mdls = tempSlice
+  
+  					nextQueue = append(nextQueue, cur.paramChild)
+  				}
+  
+  				var regMiddlewares []Middleware
+  				if cur.regChild != nil {
+  					regMiddlewares = cur.regChild.mdls
+  					// 这个就比较特殊了
+  					// 因为静态子节点必须满足这个正则才能加上去
+  
+  					tempSlice := make([]Middleware, 0, len(cur.regChild.mdls)+len(cur.mdls))
+  					tempSlice = append(tempSlice, cur.mdls...)
+  					tempSlice = append(tempSlice, cur.regChild.mdls...)
+  					cur.regChild.mdls = tempSlice
+  
+  					nextQueue = append(nextQueue, cur.regChild)
+  				}
+  
+  				for _, child := range cur.children {
+  
+  					// 判断子节点是否满足 regChild
+  					if cur.regChild != nil && cur.regChild.regExec != nil && cur.regChild.regExec.Match([]byte(child.path)) {
+  						mdls = append(mdls, regMiddlewares...)
+  					}
+  
+  					tempSlice := make([]Middleware, 0, len(cur.mdls)+len(mdls)+len(child.mdls))
+  					tempSlice = append(tempSlice, cur.mdls...)
+  					tempSlice = append(tempSlice, mdls...)
+  					tempSlice = append(tempSlice, child.mdls...)
+  
+  					child.mdls = tempSlice
+  					nextQueue = append(nextQueue, child)
+  				}
+  			}
+  			queue = nextQueue
+  		}
+  
+  	}
+  
+  	for _, root := range r.trees {
+  		fn(root)
+  	}
+  }
+  ```
+
+  
 + 避免重复计算。第一次计算好之后，我们将结果保存下来。但是因为我们路由匹配原本是一个纯粹的查找过程，所以我们不需要使用并发保护。但是现在我们成了一个读写过程，那么就需要考虑使用 `sync.Once` 或者 `atomic` 来完成读写操作
 
 ### 简化方案
@@ -183,7 +259,7 @@ func (r *router) findMdls(root *node, segs []string) []Middleware {
 | --------------------------- | ------------------------------------------------------------ |
 | `Use("GET", "/a/:id", ms1)` | 禁止注册 middleware 的时候使用路径参数，<br/>类似地，也禁止正则匹配 |
 | `Use("GET", "/a/b", ms1)`   | 这种可以禁止，也可以不禁止。<br />如果不禁止，那么只有 `/a/b` 的时候才会执行 ms1 |
-| `Use"GET", "/a/"c", ms1)`   | 这种禁止。                                                   |
+| `Use("GET", "/a/*/c", ms1)` | 这种禁止。                                                   |
 
 这种支持起来代码更加简单。只需要将查找路径上的静态节点的 middleware 合并在一起就可以
 

@@ -37,3 +37,28 @@ func TestUpload(t *testing.T) {
 	h.Post("/upload", fu.Handle())
 	h.Start(":8081")
 }
+
+func TestDownload(t *testing.T) {
+	h := NewHTTPServer()
+
+	fu := FileDownloader{
+		Dir: filepath.Join("testdata", "download"),
+	}
+	h.Get("/download", fu.Handle())
+	h.Start(":8081")
+}
+
+func TestStaticResource(t *testing.T) {
+	h := NewHTTPServer()
+
+	dir := filepath.Join("testdata", "static")
+	s, err := NewStaticResourceHandler(dir)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// localhost:8081/static/xxx.jpg
+	h.Get("/static/:file", s.Handle)
+	h.Start(":8081")
+}
