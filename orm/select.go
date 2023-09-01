@@ -2,30 +2,33 @@ package orm
 
 import (
 	"context"
-	"fmt"
-	"reflect"
+	"github.com/Moty1999/web/orm/internal/errs"
 	"strings"
 )
 
 type Selector[T any] struct {
 	table string
 	where []Predicate
-
-	sb   *strings.Builder
-	args []any
+	model *model
+	sb    *strings.Builder
+	args  []any
 }
 
 func (s *Selector[T]) Build() (*Query, error) {
+	var err error
+	s.model, err = parseModel(new(T))
+	if err != nil {
+		return nil, err
+	}
+
 	s.sb = &strings.Builder{}
 	sb := s.sb
 	sb.WriteString("SELECT * FROM ")
 
 	if s.table == "" {
 		// 我怎么拿到表名
-		var t T
-		typ := reflect.TypeOf(t)
 		sb.WriteByte('`')
-		sb.WriteString(typ.Name())
+		sb.WriteString(s.model.tableName)
 		sb.WriteByte('`')
 	} else {
 		//segs := strings.Split(s.table, ".")
@@ -97,14 +100,20 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 			s.sb.WriteByte(')')
 		}
 	case Column:
+		fd, ok := s.model.fields[e.name]
+		// 字段不同, 或者说列不对
+		if !ok {
+			return errs.NewErrUnknownField(e.name)
+		}
+
 		s.sb.WriteByte('`')
-		s.sb.WriteString(e.name)
+		s.sb.WriteString(fd.colName)
 		s.sb.WriteByte('`')
 	case value:
 		s.sb.WriteByte('?')
 		s.addArg(e.val)
 	default:
-		return fmt.Errorf("orm: 不支持的表达式类型 %v", expr)
+		return errs.NewErrUnsupportedExpression(expr)
 	}
 	return nil
 }
