@@ -17,6 +17,7 @@ func IterateFunc(entity any) (map[string]FuncInfo, error) {
 
 		input = append(input, reflect.TypeOf(entity))
 		inputValues = append(inputValues, reflect.ValueOf(entity))
+
 		for j := 1; j < numIn; j++ {
 			fnInType := fn.Type().In(j)
 			input = append(input, fnInType)

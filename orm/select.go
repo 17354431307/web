@@ -12,11 +12,19 @@ type Selector[T any] struct {
 	model *model
 	sb    *strings.Builder
 	args  []any
+	db    *DB
+}
+
+func NewSelector[T any](db *DB) *Selector[T] {
+	return &Selector[T]{
+		sb: &strings.Builder{},
+		db: db,
+	}
 }
 
 func (s *Selector[T]) Build() (*Query, error) {
 	var err error
-	s.model, err = parseModel(new(T))
+	s.model, err = s.db.r.get(new(T))
 	if err != nil {
 		return nil, err
 	}
