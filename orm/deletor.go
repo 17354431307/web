@@ -5,7 +5,7 @@ import "strings"
 type Deletor[T any] struct {
 	tableName string
 	where     []Predicate
-	model     *model
+	model     *Model
 	builder
 	db *DB
 }
@@ -32,7 +32,7 @@ func (d *Deletor[T]) Build() (*Query, error) {
 	}
 
 	var err error
-	d.model, err = d.db.r.get(new(T))
+	d.model, err = d.db.r.Get(new(T))
 	if err != nil {
 		return nil, err
 	}

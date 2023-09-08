@@ -15,8 +15,7 @@ func TestDeletor_Builder(t *testing.T) {
 		FirstName string
 	}
 
-	db, err := NewDB()
-	assert.NoError(t, err)
+	db := memoryDB(t)
 
 	testCases := []struct {
 		name string

@@ -10,7 +10,7 @@ type builder struct {
 	args []any
 }
 
-func (b *builder) buildPredicates(ps []Predicate, m *model) error {
+func (b *builder) buildPredicates(ps []Predicate, m *Model) error {
 
 	p := ps[0]
 	for i := 1; i < len(ps); i++ {
@@ -20,7 +20,7 @@ func (b *builder) buildPredicates(ps []Predicate, m *model) error {
 	return b.buildExpression(p, m)
 }
 
-func (b *builder) buildExpression(expr Expression, m *model) error {
+func (b *builder) buildExpression(expr Expression, m *Model) error {
 
 	switch exp := expr.(type) {
 	case nil:

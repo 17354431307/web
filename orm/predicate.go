@@ -5,9 +5,11 @@ type op string
 
 const (
 	opEq  op = "="
+	opLT  op = "<"
+	opGT  op = ">"
+	opOr  op = "OR"
 	opNot op = "NOT"
 	opAnd op = "AND"
-	opOr  op = "OR"
 )
 
 func (o op) String() string {
@@ -41,6 +43,22 @@ func (c Column) Eq(arg any) Predicate {
 	return Predicate{
 		left:  c,
 		op:    opEq,
+		right: value{val: arg},
+	}
+}
+
+func (c Column) GT(arg any) Predicate {
+	return Predicate{
+		left:  c,
+		op:    opGT,
+		right: value{val: arg},
+	}
+}
+
+func (c Column) LT(arg any) Predicate {
+	return Predicate{
+		left:  c,
+		op:    opLT,
 		right: value{val: arg},
 	}
 }

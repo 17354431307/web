@@ -12,6 +12,7 @@ var (
 	// 所以放在我们的 internal 包里
 	ErrPointerOnly           = errors.New("orm: 只支持指向结构体的一级指针")
 	ErrUnsupportedExpression = errors.New("orm: 不支持的表达式类型")
+	ErrNoRows                = errors.New("orm: 没有数据")
 )
 
 func NewErrUnsupportedExpressionV1(expr any) error {

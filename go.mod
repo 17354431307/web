@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/google/uuid v1.3.1
 	github.com/hashicorp/golang-lru/v2 v2.0.5
+	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.16.0
 	github.com/redis/go-redis/v9 v9.1.0
@@ -17,6 +18,7 @@ require (
 )
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

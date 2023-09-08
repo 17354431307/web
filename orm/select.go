@@ -3,13 +3,14 @@ package orm
 import (
 	"context"
 	"github.com/Moty1999/web/orm/internal/errs"
+	"reflect"
 	"strings"
 )
 
 type Selector[T any] struct {
 	table string
 	where []Predicate
-	model *model
+	model *Model
 	sb    *strings.Builder
 	args  []any
 	db    *DB
@@ -24,7 +25,7 @@ func NewSelector[T any](db *DB) *Selector[T] {
 
 func (s *Selector[T]) Build() (*Query, error) {
 	var err error
-	s.model, err = s.db.r.get(new(T))
+	s.model, err = s.db.r.Get(new(T))
 	if err != nil {
 		return nil, err
 	}
@@ -151,12 +152,95 @@ func (s *Selector[T]) Where(ps ...Predicate) *Selector[T] {
 }
 
 func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
-	//TODO implement me
+	query, err := s.Build()
+	if err != nil {
+		return nil, err
+	}
 
-	panic("implement me")
+	db := s.db.db
+	// 在这里，就是要发起查询，并且处理结果集
+	rows, err := db.QueryContext(ctx, query.SQL, query.Args...)
+	// 这个是查询错误
+	if err != nil {
+		return nil, err
+	}
+
+	// 你要确认有没有数据
+	if !rows.Next() {
+		// 要不要返回一个 error ？
+		// 返回 error，
+		return nil, ErrNoRows
+	}
+
+	// 在这里处理结果集
+
+	// 我怎么知道你 SELECT 出来了哪些列？
+	// 拿到了 SELECT 出来的列
+	cs, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	// 怎么利用 cs 来解决顺序问题和类型问题
+
+	tp := new(T)
+
+	// 通过 cs 来构造 vals
+	// 怎么构造呢？
+	vals := make([]any, 0, len(cs))
+	for _, c := range cs {
+		// c 是列名
+		for _, fd := range s.model.fields {
+			if fd.colName == c {
+				// 反射创建了一个实例
+				// 这里创建的类型是原本类型的指针类型
+				// 例如 fd.Type = int, 那么 val 是 *int
+				val := reflect.New(fd.typ)
+				vals = append(vals, val.Interface())
+			}
+		}
+	}
+
+	// 第一个问题，类型要匹配
+	// 第二个问题，顺序要匹配
+
+	// SELECT id, first_name, age, last_name
+	// SELECT first_name, age, last_name, id
+	rows.Scan(vals...)
+
+	// 想办法把 vals 塞进去结果 tp 里面
+	tpValue := reflect.ValueOf(tp)
+	for i, c := range cs {
+		// c 是列名
+		for _, fd := range s.model.fields {
+			if fd.colName == c {
+				tpValue.Elem().FieldByName(fd.GoName).
+					Set(reflect.ValueOf(vals[i]).Elem())
+			}
+		}
+	}
+
+	return tp, err
 }
 
 func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
-	//TODO implement me
-	panic("implement me")
+	query, err := s.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	db := s.db.db
+	// 在这里，就是要发起查询，并且处理结果集
+	rows, err := db.QueryContext(ctx, query.SQL, query.Args)
+	if err != nil {
+		return nil, err
+	}
+
+	for !rows.Next() {
+		// 要不要返回 error ?
+		// 返回 error, 和 sql 包语义保持一致
+		return nil, ErrNoRows
+	}
+
+	panic("implement me!")
 }
