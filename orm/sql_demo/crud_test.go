@@ -3,11 +3,12 @@ package sql_demo
 import (
 	"context"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDB(t *testing.T) {
@@ -74,8 +75,8 @@ CREATE TABLE IF NOT EXISTS test_model(
 }
 
 func TestTX(t *testing.T) {
-	dsn := ""
-	db, err := sql.Open("sqlite", dsn)
+	dsn := "file:test.db?cache=shared&mode=memory"
+	db, err := sql.Open("sqlite3", dsn)
 	assert.NoError(t, err)
 	defer db.Close()
 
@@ -120,12 +121,22 @@ CREATE TABLE IF NOT EXISTS test_model(
 }
 
 func TestPrepareStatement(t *testing.T) {
-	dsn := ""
-	db, err := sql.Open("sqlite", dsn)
+	dsn := "file:test.db?cache=shared&mode=memory"
+	db, err := sql.Open("sqlite3", dsn)
 	assert.NoError(t, err)
 	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+
+	// 除了 SELECT 语句，都是使用 ExecContext
+	_, err = db.ExecContext(ctx, `
+CREATE TABLE IF NOT EXISTS test_model(
+    id INTEGER PRIMARY KEY,
+    first_name TEXT NOT NULL,
+    age INTEGER,
+    last_name TEXT NOT NULL
+)
+`)
 
 	stmt, err := db.PrepareContext(ctx, "SELECT * From `test_model` WHERE `id` = ?")
 	assert.NoError(t, err)

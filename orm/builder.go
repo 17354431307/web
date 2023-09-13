@@ -2,6 +2,7 @@ package orm
 
 import (
 	"github.com/Moty1999/web/orm/internal/errs"
+	"github.com/Moty1999/web/orm/model"
 	"strings"
 )
 
@@ -10,7 +11,7 @@ type builder struct {
 	args []any
 }
 
-func (b *builder) buildPredicates(ps []Predicate, m *Model) error {
+func (b *builder) buildPredicates(ps []Predicate, m *model.Model) error {
 
 	p := ps[0]
 	for i := 1; i < len(ps); i++ {
@@ -20,7 +21,7 @@ func (b *builder) buildPredicates(ps []Predicate, m *Model) error {
 	return b.buildExpression(p, m)
 }
 
-func (b *builder) buildExpression(expr Expression, m *Model) error {
+func (b *builder) buildExpression(expr Expression, m *model.Model) error {
 
 	switch exp := expr.(type) {
 	case nil:
@@ -60,14 +61,14 @@ func (b *builder) buildExpression(expr Expression, m *Model) error {
 		}
 
 	case Column:
-		f, ok := m.fields[exp.name]
+		f, ok := m.FieldMap[exp.name]
 		if !ok {
-			return errs.NewErrUnknownField(exp.name)
+			return errs.NewErrUnknowField(exp.name)
 		}
 
 		b.sb.WriteByte(' ')
 		b.sb.WriteByte('`')
-		b.sb.WriteString(f.colName)
+		b.sb.WriteString(f.ColName)
 		b.sb.WriteByte('`')
 	case value:
 		b.sb.WriteByte(' ')

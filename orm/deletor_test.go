@@ -75,7 +75,7 @@ func TestDeletor_Builder(t *testing.T) {
 		{
 			name:    "invalid column",
 			builder: NewDeletor[TestModel](db).Where(C("XXXX").Eq(20)),
-			wantErr: errs.NewErrUnknownField("XXXX"),
+			wantErr: errs.NewErrUnknowField("XXXX"),
 		},
 		{
 			name:    "empty where",

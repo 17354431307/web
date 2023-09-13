@@ -32,6 +32,5 @@ func TestSqlMock(t *testing.T) {
 	}
 
 	_, err = db.QueryContext(context.Background(), "SELECT `id` FROM `user` WHERE `id` = 1")
-	assert.NoError(t, err)
-
+	assert.Equal(t, errors.New("mock error"), err)
 }

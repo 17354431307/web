@@ -1,8 +1,9 @@
 package sql_demo
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestJsonColumn_Value(t *testing.T) {

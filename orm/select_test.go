@@ -3,12 +3,15 @@ package orm
 import (
 	"context"
 	"database/sql"
+	_ "database/sql/driver"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Moty1999/web/orm/internal/errs"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestSelector_Build(t *testing.T) {
@@ -97,7 +100,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			name:    "invalid column",
 			builder: NewSelector[TestModel](db).Where(C("Age").Eq(18).Or(C("XXXX").Eq("Tom"))),
-			wantErr: errs.NewErrUnknownField("XXXX"),
+			wantErr: errs.NewErrUnknowField("XXXX"),
 		},
 	}
 
@@ -138,6 +141,11 @@ func TestSelector_Get(t *testing.T) {
 	rows.AddRow("1", "Tom", "18", "Jerry")
 	mock.ExpectQuery("SELECT .*").WillReturnRows(rows)
 
+	// 对应 scan error
+	rows = sqlmock.NewRows([]string{"id", "first_name", "age", "last_name"})
+	rows.AddRow("abc", "Tom", "18", "Jerry")
+	mock.ExpectQuery("SELECT .*").WillReturnRows(rows)
+
 	fmt.Println(mock)
 
 	testCases := []struct {
@@ -149,7 +157,7 @@ func TestSelector_Get(t *testing.T) {
 		{
 			name:    "invalid query",
 			s:       NewSelector[TestModel](db).Where(C("XXX").Eq(1)),
-			wantErr: errs.NewErrUnknownField("XXX"),
+			wantErr: errs.NewErrUnknowField("XXX"),
 		},
 		{
 			name:    "query error",
@@ -171,6 +179,11 @@ func TestSelector_Get(t *testing.T) {
 				LastName:  &sql.NullString{Valid: true, String: "Jerry"},
 			},
 		},
+		//{
+		//	name:    "scan error",
+		//	s:       NewSelector[TestModel](db).Where(C("Id").Eq(1)),
+		//	wantErr: ,
+		//},
 	}
 
 	for _, tc := range testCases {

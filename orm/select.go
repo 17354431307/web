@@ -3,14 +3,14 @@ package orm
 import (
 	"context"
 	"github.com/Moty1999/web/orm/internal/errs"
-	"reflect"
+	model2 "github.com/Moty1999/web/orm/model"
 	"strings"
 )
 
 type Selector[T any] struct {
 	table string
 	where []Predicate
-	model *Model
+	model *model2.Model
 	sb    *strings.Builder
 	args  []any
 	db    *DB
@@ -37,7 +37,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 	if s.table == "" {
 		// 我怎么拿到表名
 		sb.WriteByte('`')
-		sb.WriteString(s.model.tableName)
+		sb.WriteString(s.model.TableName)
 		sb.WriteByte('`')
 	} else {
 		//segs := strings.Split(s.table, ".")
@@ -109,14 +109,14 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 			s.sb.WriteByte(')')
 		}
 	case Column:
-		fd, ok := s.model.fields[e.name]
+		fd, ok := s.model.FieldMap[e.name]
 		// 字段不同, 或者说列不对
 		if !ok {
-			return errs.NewErrUnknownField(e.name)
+			return errs.NewErrUnknowField(e.name)
 		}
 
 		s.sb.WriteByte('`')
-		s.sb.WriteString(fd.colName)
+		s.sb.WriteString(fd.ColName)
 		s.sb.WriteByte('`')
 	case value:
 		s.sb.WriteByte('?')
@@ -151,6 +151,29 @@ func (s *Selector[T]) Where(ps ...Predicate) *Selector[T] {
 	return s
 }
 
+//func (s *Selector[T]) GetV1(ctx context.Context) (*T, error) {
+//	query, err := s.Build()
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	db := s.db.db
+//	// 在这里，就是要发起查询，并且处理结果集
+//	rows, err := db.QueryContext(ctx, query.SQL, query.Args...)
+//	// 这个是查询错误
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//
+//	// 你要确认有没有数据
+//	if !rows.Next() {
+//		// 要不要返回一个 error ？
+//		// 返回 error，
+//		return nil, ErrNoRows
+//	}
+//}
+
 func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 	query, err := s.Build()
 	if err != nil {
@@ -172,54 +195,13 @@ func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 		return nil, ErrNoRows
 	}
 
-	// 在这里处理结果集
-
-	// 我怎么知道你 SELECT 出来了哪些列？
-	// 拿到了 SELECT 出来的列
-	cs, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-
-	// 怎么利用 cs 来解决顺序问题和类型问题
-
 	tp := new(T)
+	val := s.db.creator(s.model, tp)
 
-	// 通过 cs 来构造 vals
-	// 怎么构造呢？
-	vals := make([]any, 0, len(cs))
-	for _, c := range cs {
-		// c 是列名
-		for _, fd := range s.model.fields {
-			if fd.colName == c {
-				// 反射创建了一个实例
-				// 这里创建的类型是原本类型的指针类型
-				// 例如 fd.Type = int, 那么 val 是 *int
-				val := reflect.New(fd.typ)
-				vals = append(vals, val.Interface())
-			}
-		}
-	}
+	val.SetColumns(rows)
 
-	// 第一个问题，类型要匹配
-	// 第二个问题，顺序要匹配
-
-	// SELECT id, first_name, age, last_name
-	// SELECT first_name, age, last_name, id
-	rows.Scan(vals...)
-
-	// 想办法把 vals 塞进去结果 tp 里面
-	tpValue := reflect.ValueOf(tp)
-	for i, c := range cs {
-		// c 是列名
-		for _, fd := range s.model.fields {
-			if fd.colName == c {
-				tpValue.Elem().FieldByName(fd.GoName).
-					Set(reflect.ValueOf(vals[i]).Elem())
-			}
-		}
-	}
-
+	// 接口定义好之后, 就两件事情, 一个是用新接口的方法改造上层,
+	// 一个就是提供不同的实现
 	return tp, err
 }
 

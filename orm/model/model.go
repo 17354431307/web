@@ -1,4 +1,4 @@
-package orm
+package model
 
 import (
 	"github.com/Moty1999/web/orm/internal/errs"
@@ -20,17 +20,23 @@ type Registry interface {
 type ModelOption func(m *Model) error
 
 type Model struct {
-	tableName string
-	fields    map[string]*Field
+	TableName string
+	// 字段名到字段的映射
+	FieldMap map[string]*Field
+	// 列名到字段的映射
+	ColumnMap map[string]*Field
 }
 
 type Field struct {
 	// 字段名
 	GoName string
 	// 列名
-	colName string
+	ColName string
 	// 代表的是字段的类型
-	typ reflect.Type
+	Type reflect.Type
+
+	// 字段相对结构体的偏移量
+	Offset uintptr
 }
 
 // register 代表着元数据的注册中心
@@ -40,7 +46,7 @@ type registry struct {
 	models sync.Map
 }
 
-func newRegistry() *registry {
+func NewRegistry() Registry {
 	return &registry{}
 }
 
@@ -64,10 +70,10 @@ func (r *registry) Get(val any) (*Model, error) {
 //		检查了两遍
 //	*/
 //
-//	typ := reflect.TypeOf(val)
+//	Type := reflect.TypeOf(val)
 //
 //	r.lock.RLock()
-//	m, ok := r.models[typ]
+//	m, ok := r.models[Type]
 //	r.lock.RUnlock()
 //
 //	if ok {
@@ -76,7 +82,7 @@ func (r *registry) Get(val any) (*Model, error) {
 //
 //	r.lock.Lock()
 //	defer r.lock.Unlock()
-//	m, ok = r.models[typ]
+//	m, ok = r.models[Type]
 //	if ok {
 //		return m, nil
 //	}
@@ -85,7 +91,7 @@ func (r *registry) Get(val any) (*Model, error) {
 //	if err != nil {
 //		return nil, err
 //	}
-//	r.models[typ] = m
+//	r.models[Type] = m
 //	return m, nil
 //}
 
@@ -100,6 +106,7 @@ func (r *registry) Register(entity any, opts ...ModelOption) (*Model, error) {
 	elemType := typ.Elem()
 	numField := elemType.NumField()
 	fieldMap := make(map[string]*Field, numField)
+	columnMap := make(map[string]*Field, numField)
 	for i := 0; i < numField; i++ {
 		fd := elemType.Field(i)
 		pair, err := r.parseTag(fd.Tag)
@@ -112,13 +119,17 @@ func (r *registry) Register(entity any, opts ...ModelOption) (*Model, error) {
 			columnName = underscoreName(fd.Name)
 		}
 
-		fieldMap[fd.Name] = &Field{
-			colName: columnName,
+		fdMeta := &Field{
+			ColName: columnName,
 			// 字段类型
-			typ: fd.Type,
+			Type: fd.Type,
 			// 字段名
 			GoName: fd.Name,
+			Offset: fd.Offset,
 		}
+
+		fieldMap[fd.Name] = fdMeta
+		columnMap[columnName] = fdMeta
 	}
 
 	var tableName string
@@ -130,8 +141,9 @@ func (r *registry) Register(entity any, opts ...ModelOption) (*Model, error) {
 	}
 
 	res := &Model{
-		tableName: tableName,
-		fields:    fieldMap,
+		TableName: tableName,
+		FieldMap:  fieldMap,
+		ColumnMap: columnMap,
 	}
 
 	for _, opt := range opts {
@@ -147,7 +159,7 @@ func (r *registry) Register(entity any, opts ...ModelOption) (*Model, error) {
 
 func ModelWithTableName(tableName string) ModelOption {
 	return func(m *Model) error {
-		m.tableName = tableName
+		m.TableName = tableName
 		return nil
 	}
 }
@@ -155,12 +167,12 @@ func ModelWithTableName(tableName string) ModelOption {
 func ModelWithColumnName(field string, colName string) ModelOption {
 	return func(m *Model) error {
 
-		fd, ok := m.fields[field]
+		fd, ok := m.FieldMap[field]
 		if !ok {
-			return errs.NewErrUnknownField(field)
+			return errs.NewErrUnknowField(field)
 		}
 
-		fd.colName = colName
+		fd.ColName = colName
 		return nil
 	}
 }
@@ -204,4 +216,8 @@ func underscoreName(tableName string) string {
 	}
 
 	return string(buf)
+}
+
+type TableName interface {
+	TableName() string
 }

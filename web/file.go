@@ -1,13 +1,14 @@
 package web
 
 import (
-	lru "github.com/hashicorp/golang-lru/v2"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type FileUploader struct {

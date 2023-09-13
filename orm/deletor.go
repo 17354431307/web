@@ -1,11 +1,14 @@
 package orm
 
-import "strings"
+import (
+	model2 "github.com/Moty1999/web/orm/model"
+	"strings"
+)
 
 type Deletor[T any] struct {
 	tableName string
 	where     []Predicate
-	model     *Model
+	model     *model2.Model
 	builder
 	db *DB
 }
@@ -45,7 +48,7 @@ func (d *Deletor[T]) Build() (*Query, error) {
 	} else {
 		d.sb.WriteByte(' ')
 		d.sb.WriteByte('`')
-		d.sb.WriteString(d.model.tableName)
+		d.sb.WriteString(d.model.TableName)
 		d.sb.WriteByte('`')
 	}
 
