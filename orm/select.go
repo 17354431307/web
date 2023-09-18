@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+// Selectable 是一个标记接口
+// 它代表的是查找的列, 或者聚合函数等
+// SELECT
+type Selectable interface {
+	selectable()
+}
+
 type Selector[T any] struct {
 	table string
 	where []Predicate
@@ -14,6 +21,7 @@ type Selector[T any] struct {
 	sb    *strings.Builder
 	args  []any
 	db    *DB
+	cols  []Selectable
 }
 
 func NewSelector[T any](db *DB) *Selector[T] {
@@ -32,7 +40,14 @@ func (s *Selector[T]) Build() (*Query, error) {
 
 	s.sb = &strings.Builder{}
 	sb := s.sb
-	sb.WriteString("SELECT * FROM ")
+	sb.WriteString("SELECT ")
+
+	err = s.buildColumns()
+	if err != nil {
+		return nil, err
+	}
+
+	sb.WriteString(" FROM ")
 
 	if s.table == "" {
 		// 我怎么拿到表名
@@ -109,21 +124,61 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 			s.sb.WriteByte(')')
 		}
 	case Column:
-		fd, ok := s.model.FieldMap[e.name]
-		// 字段不同, 或者说列不对
-		if !ok {
-			return errs.NewErrUnknowField(e.name)
-		}
-
-		s.sb.WriteByte('`')
-		s.sb.WriteString(fd.ColName)
-		s.sb.WriteByte('`')
+		return s.buildColumn(e.name)
 	case value:
 		s.sb.WriteByte('?')
 		s.addArg(e.val)
 	default:
 		return errs.NewErrUnsupportedExpression(expr)
 	}
+	return nil
+}
+
+func (s *Selector[T]) buildColumns() error {
+	sb := s.sb
+
+	if len(s.cols) == 0 {
+		// 没有指定列
+		sb.WriteByte('*')
+		return nil
+	}
+
+	for i, col := range s.cols {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+
+		switch c := col.(type) {
+		case Column:
+			err := s.buildColumn(c.name)
+			if err != nil {
+				return err
+			}
+		case Aggregate:
+			// 聚合函数名
+			sb.WriteString(c.fn)
+			sb.WriteByte('(')
+			err := s.buildColumn(c.arg)
+			if err != nil {
+				return err
+			}
+			sb.WriteByte(')')
+		}
+
+	}
+	return nil
+}
+
+func (s *Selector[T]) buildColumn(col string) error {
+	fd, ok := s.model.FieldMap[col]
+	// 字段不同, 或者说列不对
+	if !ok {
+		return errs.NewErrUnknowField(col)
+	}
+
+	s.sb.WriteByte('`')
+	s.sb.WriteString(fd.ColName)
+	s.sb.WriteByte('`')
 	return nil
 }
 
@@ -198,7 +253,10 @@ func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 	tp := new(T)
 	val := s.db.creator(s.model, tp)
 
-	val.SetColumns(rows)
+	err = val.SetColumns(rows)
+	if err != nil {
+		return nil, err
+	}
 
 	// 接口定义好之后, 就两件事情, 一个是用新接口的方法改造上层,
 	// 一个就是提供不同的实现
@@ -225,4 +283,21 @@ func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 	}
 
 	panic("implement me!")
+}
+
+//func (s *Selector[T]) Select(cols ...string) *Selector[T] {
+//	s.cols = cols
+//	return s
+//}
+//
+//// 这种也是可行的
+//// s.Select("first_name, last_name")
+//func (s *Selector[T]) SelectV1(cols ...string) *Selector[T] {
+//	s.cols = cols
+//	return s
+//}
+
+func (s *Selector[T]) Select(cols ...Selectable) *Selector[T] {
+	s.cols = cols
+	return s
 }

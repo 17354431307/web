@@ -11,17 +11,19 @@ import (
 type UnsafeValue struct {
 	model *model.Model
 
-	// 对应 T 的指针
-	val any
+	// 起始地址(基准地址)
+	address unsafe.Pointer
 }
 
 // 这就是判断 NewUnsafeValue 是否符合 Creator 签名, 当 Creator 发生变化的时候, 这里会飘红提醒
 var _ Creator = NewUnsafeValue
 
 func NewUnsafeValue(model *model.Model, val any) Value {
+	address := reflect.ValueOf(val).UnsafePointer()
+
 	return UnsafeValue{
-		model: model,
-		val:   val,
+		model:   model,
+		address: address,
 	}
 }
 
@@ -37,7 +39,6 @@ func (u UnsafeValue) SetColumns(rows *sql.Rows) error {
 	}
 
 	var vals []any
-	address := reflect.ValueOf(u.val).UnsafePointer()
 	for _, c := range cs {
 		fd, ok := u.model.ColumnMap[c]
 		if !ok {
@@ -46,7 +47,7 @@ func (u UnsafeValue) SetColumns(rows *sql.Rows) error {
 
 		// 是不是要计算字段的地址
 		// 起始地址 + 偏移量
-		fdAddress := unsafe.Pointer(uintptr(address) + fd.Offset)
+		fdAddress := unsafe.Pointer(uintptr(u.address) + fd.Offset)
 		val := reflect.NewAt(fd.Type, fdAddress)
 		vals = append(vals, val.Interface())
 	}

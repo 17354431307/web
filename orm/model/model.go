@@ -14,10 +14,10 @@ const (
 
 type Registry interface {
 	Get(val any) (*Model, error)
-	Register(val any, opts ...ModelOption) (*Model, error)
+	Register(val any, opts ...Option) (*Model, error)
 }
 
-type ModelOption func(m *Model) error
+type Option func(m *Model) error
 
 type Model struct {
 	TableName string
@@ -96,7 +96,7 @@ func (r *registry) Get(val any) (*Model, error) {
 //}
 
 // Register 限制只能用一级指针
-func (r *registry) Register(entity any, opts ...ModelOption) (*Model, error) {
+func (r *registry) Register(entity any, opts ...Option) (*Model, error) {
 	typ := reflect.TypeOf(entity)
 
 	if typ.Kind() != reflect.Ptr || typ.Elem().Kind() != reflect.Struct {
@@ -157,14 +157,14 @@ func (r *registry) Register(entity any, opts ...ModelOption) (*Model, error) {
 	return res, nil
 }
 
-func ModelWithTableName(tableName string) ModelOption {
+func WithTableName(tableName string) Option {
 	return func(m *Model) error {
 		m.TableName = tableName
 		return nil
 	}
 }
 
-func ModelWithColumnName(field string, colName string) ModelOption {
+func WithColumnName(field string, colName string) Option {
 	return func(m *Model) error {
 
 		fd, ok := m.FieldMap[field]

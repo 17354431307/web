@@ -39,6 +39,12 @@ func OpenDB(db *sql.DB, opts ...DBOption) (*DB, error) {
 	return res, nil
 }
 
+func DBWithRegister(r model.Registry) DBOption {
+	return func(db *DB) {
+		db.r = r
+	}
+}
+
 func DBUseReflect() DBOption {
 	return func(db *DB) {
 		db.creator = valuer.NewReflectValue
