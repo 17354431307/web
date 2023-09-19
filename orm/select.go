@@ -107,11 +107,14 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 			s.sb.WriteByte(')')
 		}
 
-		if e.left != nil {
+		if e.left != nil && e.op != "" {
 			s.sb.WriteByte(' ')
 		}
-		s.sb.WriteString(e.op.String())
-		s.sb.WriteByte(' ')
+
+		if e.op != "" {
+			s.sb.WriteString(e.op.String())
+			s.sb.WriteByte(' ')
+		}
 
 		_, ok = e.right.(Predicate)
 		if ok {
@@ -128,6 +131,11 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 	case value:
 		s.sb.WriteByte('?')
 		s.addArg(e.val)
+	case RawExpr:
+		s.sb.WriteByte('(')
+		s.sb.WriteString(e.raw)
+		s.addArg(e.args...)
+		s.sb.WriteByte(')')
 	default:
 		return errs.NewErrUnsupportedExpression(expr)
 	}
@@ -163,6 +171,10 @@ func (s *Selector[T]) buildColumns() error {
 				return err
 			}
 			sb.WriteByte(')')
+		case RawExpr:
+			sb.WriteString(c.raw)
+			s.addArg(c.args...)
+
 		}
 
 	}
@@ -182,13 +194,17 @@ func (s *Selector[T]) buildColumn(col string) error {
 	return nil
 }
 
-func (s *Selector[T]) addArg(val any) *Selector[T] {
+func (s *Selector[T]) addArg(vals ...any) {
+	if len(vals) == 0 {
+		return
+	}
+
 	if s.args == nil {
 		s.args = make([]any, 0, 8)
 	}
 
-	s.args = append(s.args, val)
-	return s
+	s.args = append(s.args, vals...)
+
 }
 
 func (s *Selector[T]) From(table string) *Selector[T] {

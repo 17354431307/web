@@ -66,8 +66,3 @@ type value struct {
 }
 
 func (p value) expr() {}
-
-// Expression 是一个标记接口, 代表表达式
-type Expression interface {
-	expr()
-}

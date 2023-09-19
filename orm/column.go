@@ -12,7 +12,18 @@ func (c Column) Eq(arg any) Predicate {
 	return Predicate{
 		left:  c,
 		op:    opEq,
-		right: value{val: arg},
+		right: c.valueOf(arg),
+	}
+}
+
+func (c Column) valueOf(arg any) Expression {
+	switch val := arg.(type) {
+	case Expression:
+		return val
+	default:
+		return value{
+			val: arg,
+		}
 	}
 }
 

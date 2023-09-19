@@ -191,6 +191,22 @@ func TestSelector_Build(t *testing.T) {
 			builder: NewSelector[TestModel](db).Where(C("Age").Eq(18).Or(C("XXXX").Eq("Tom"))),
 			wantErr: errs.NewErrUnknowField("XXXX"),
 		},
+		{
+			name:    "raw expression as predicate",
+			builder: NewSelector[TestModel](db).Where(Raw("`id` > ?", 18).AsPredicate()),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` WHERE (`id` > ?);",
+				Args: []any{18},
+			},
+		},
+		{
+			name:    "raw expression used in predicate",
+			builder: NewSelector[TestModel](db).Where(C("Id").Eq(Raw("`age` + ?", 1))),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` WHERE `id` = (`age` + ?);",
+				Args: []any{1},
+			},
+		},
 	}
 
 	for _, tc := range testCase {
