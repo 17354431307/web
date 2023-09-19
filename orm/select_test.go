@@ -35,10 +35,24 @@ func TestSelector_Select(t *testing.T) {
 			},
 		},
 		{
+			name: "columns alias",
+			s:    NewSelector[TestModel](db).Select(C("FirstName").As("my_name"), C("LastName")),
+			wantQuery: &Query{
+				SQL: "SELECT `first_name` AS `my_name`, `last_name` FROM `test_model`;",
+			},
+		},
+		{
 			name: "avg",
 			s:    NewSelector[TestModel](db).Select(Avg("Age")),
 			wantQuery: &Query{
 				SQL: "SELECT AVG(`age`) FROM `test_model`;",
+			},
+		},
+		{
+			name: "avg alias",
+			s:    NewSelector[TestModel](db).Select(Avg("Age").As("avg_age")),
+			wantQuery: &Query{
+				SQL: "SELECT AVG(`age`) AS `avg_age` FROM `test_model`;",
 			},
 		},
 		{
@@ -191,6 +205,7 @@ func TestSelector_Build(t *testing.T) {
 			builder: NewSelector[TestModel](db).Where(C("Age").Eq(18).Or(C("XXXX").Eq("Tom"))),
 			wantErr: errs.NewErrUnknowField("XXXX"),
 		},
+
 		{
 			name:    "raw expression as predicate",
 			builder: NewSelector[TestModel](db).Where(Raw("`id` > ?", 18).AsPredicate()),
@@ -199,12 +214,23 @@ func TestSelector_Build(t *testing.T) {
 				Args: []any{18},
 			},
 		},
+
 		{
 			name:    "raw expression used in predicate",
 			builder: NewSelector[TestModel](db).Where(C("Id").Eq(Raw("`age` + ?", 1))),
 			wantQuery: &Query{
 				SQL:  "SELECT * FROM `test_model` WHERE `id` = (`age` + ?);",
 				Args: []any{1},
+			},
+		},
+
+		// 在 where 中忽略 Column 的别名
+		{
+			name:    "columns alias in where",
+			builder: NewSelector[TestModel](db).Where(C("Id").As("my_id").Eq(18)),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` WHERE `id` = ?;",
+				Args: []any{18},
 			},
 		},
 	}

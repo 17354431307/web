@@ -127,7 +127,9 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 			s.sb.WriteByte(')')
 		}
 	case Column:
-		return s.buildColumn(e.name)
+		// 这种写法很隐晦
+		e.alias = ""
+		return s.buildColumn(e)
 	case value:
 		s.sb.WriteByte('?')
 		s.addArg(e.val)
@@ -158,7 +160,7 @@ func (s *Selector[T]) buildColumns() error {
 
 		switch c := col.(type) {
 		case Column:
-			err := s.buildColumn(c.name)
+			err := s.buildColumn(c)
 			if err != nil {
 				return err
 			}
@@ -166,11 +168,17 @@ func (s *Selector[T]) buildColumns() error {
 			// 聚合函数名
 			sb.WriteString(c.fn)
 			sb.WriteByte('(')
-			err := s.buildColumn(c.arg)
+			err := s.buildColumn(Column{name: c.arg})
 			if err != nil {
 				return err
 			}
 			sb.WriteByte(')')
+			// 聚合函数本身的别名
+			if c.alias != "" {
+				sb.WriteString(" AS `")
+				sb.WriteString(c.alias)
+				sb.WriteByte('`')
+			}
 		case RawExpr:
 			sb.WriteString(c.raw)
 			s.addArg(c.args...)
@@ -181,16 +189,25 @@ func (s *Selector[T]) buildColumns() error {
 	return nil
 }
 
-func (s *Selector[T]) buildColumn(col string) error {
-	fd, ok := s.model.FieldMap[col]
+func (s *Selector[T]) buildColumn(c Column) error {
+	// buildColumn(c Column, useAlias bool) 还有这样一种设计，使用 useAlias 这个标记位控制 Column 是否使用别名
+	// 主要是为了处理在 Where 表达式式处理用户使用 Column 别名的错误用法
+
+	fd, ok := s.model.FieldMap[c.name]
 	// 字段不同, 或者说列不对
 	if !ok {
-		return errs.NewErrUnknowField(col)
+		return errs.NewErrUnknowField(c.name)
 	}
 
 	s.sb.WriteByte('`')
 	s.sb.WriteString(fd.ColName)
 	s.sb.WriteByte('`')
+
+	if c.alias != "" {
+		s.sb.WriteString(" AS `")
+		s.sb.WriteString(c.alias)
+		s.sb.WriteByte('`')
+	}
 	return nil
 }
 

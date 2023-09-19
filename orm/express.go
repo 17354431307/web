@@ -20,7 +20,8 @@ func Raw(expr string, args ...any) RawExpr {
 }
 
 func (r RawExpr) selectable() {}
-func (r RawExpr) expr()       {}
+
+func (r RawExpr) expr() {}
 
 func (r RawExpr) AsPredicate() Predicate {
 	return Predicate{

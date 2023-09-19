@@ -1,11 +1,20 @@
 package orm
 
 type Column struct {
-	name string
+	name  string
+	alias string
 }
 
 func C(name string) Column {
 	return Column{name: name}
+}
+
+// 这个设计是不可变的设计 immutable, 和 react 的理念一样
+func (c Column) As(alias string) Column {
+	return Column{
+		name:  c.name,
+		alias: alias,
+	}
 }
 
 func (c Column) Eq(arg any) Predicate {
@@ -42,6 +51,7 @@ func (c Column) LT(arg any) Predicate {
 		right: value{val: arg},
 	}
 }
+
 func (c Column) expr() {}
 
 func (c Column) selectable() {
