@@ -21,6 +21,8 @@ type Option func(m *Model) error
 
 type Model struct {
 	TableName string
+	Fields    []*Field
+
 	// 字段名到字段的映射
 	FieldMap map[string]*Field
 	// 列名到字段的映射
@@ -107,6 +109,7 @@ func (r *registry) Register(entity any, opts ...Option) (*Model, error) {
 	numField := elemType.NumField()
 	fieldMap := make(map[string]*Field, numField)
 	columnMap := make(map[string]*Field, numField)
+	fields := make([]*Field, 0, numField)
 	for i := 0; i < numField; i++ {
 		fd := elemType.Field(i)
 		pair, err := r.parseTag(fd.Tag)
@@ -130,6 +133,7 @@ func (r *registry) Register(entity any, opts ...Option) (*Model, error) {
 
 		fieldMap[fd.Name] = fdMeta
 		columnMap[columnName] = fdMeta
+		fields = append(fields, fdMeta)
 	}
 
 	var tableName string
@@ -144,6 +148,7 @@ func (r *registry) Register(entity any, opts ...Option) (*Model, error) {
 		TableName: tableName,
 		FieldMap:  fieldMap,
 		ColumnMap: columnMap,
+		Fields:    fields,
 	}
 
 	for _, opt := range opts {
