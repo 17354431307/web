@@ -9,6 +9,10 @@ func C(name string) Column {
 	return Column{name: name}
 }
 
+func (c Column) assign() {
+
+}
+
 // 这个设计是不可变的设计 immutable, 和 react 的理念一样
 func (c Column) As(alias string) Column {
 	return Column{

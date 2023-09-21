@@ -3,8 +3,6 @@ package orm
 import (
 	"context"
 	"github.com/Moty1999/web/orm/internal/errs"
-	model2 "github.com/Moty1999/web/orm/model"
-	"strings"
 )
 
 // Selectable 是一个标记接口
@@ -15,18 +13,19 @@ type Selectable interface {
 }
 
 type Selector[T any] struct {
+	builder
 	table string
 	where []Predicate
-	model *model2.Model
-	sb    *strings.Builder
-	args  []any
 	db    *DB
 	cols  []Selectable
 }
 
 func NewSelector[T any](db *DB) *Selector[T] {
 	return &Selector[T]{
-		sb: &strings.Builder{},
+		builder: builder{
+			dialect: db.dialect,
+			quoter:  db.dialect.quoter(),
+		},
 		db: db,
 	}
 }
@@ -37,23 +36,21 @@ func (s *Selector[T]) Build() (*Query, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	s.sb = &strings.Builder{}
-	sb := s.sb
-	sb.WriteString("SELECT ")
+	
+	s.sb.WriteString("SELECT ")
 
 	err = s.buildColumns()
 	if err != nil {
 		return nil, err
 	}
 
-	sb.WriteString(" FROM ")
+	s.sb.WriteString(" FROM ")
 
 	if s.table == "" {
 		// 我怎么拿到表名
-		sb.WriteByte('`')
-		sb.WriteString(s.model.TableName)
-		sb.WriteByte('`')
+		s.sb.WriteByte('`')
+		s.sb.WriteString(s.model.TableName)
+		s.sb.WriteByte('`')
 	} else {
 		//segs := strings.Split(s.table, ".")
 		//sb.WriteByte('`')
@@ -64,11 +61,11 @@ func (s *Selector[T]) Build() (*Query, error) {
 		//sb.WriteString(segs[1])
 		//sb.WriteByte('`')
 
-		sb.WriteString(s.table)
+		s.sb.WriteString(s.table)
 	}
 
 	if len(s.where) > 0 {
-		sb.WriteString(" WHERE ")
+		s.sb.WriteString(" WHERE ")
 		p := s.where[0]
 		for i := 1; i < len(s.where); i++ {
 			p = p.And(s.where[i])
@@ -78,10 +75,10 @@ func (s *Selector[T]) Build() (*Query, error) {
 		}
 	}
 
-	sb.WriteByte(';')
+	s.sb.WriteByte(';')
 
 	return &Query{
-		SQL:  sb.String(),
+		SQL:  s.sb.String(),
 		Args: s.args,
 	}, nil
 }
@@ -145,17 +142,16 @@ func (s *Selector[T]) buildExpression(expr Expression) error {
 }
 
 func (s *Selector[T]) buildColumns() error {
-	sb := s.sb
 
 	if len(s.cols) == 0 {
 		// 没有指定列
-		sb.WriteByte('*')
+		s.sb.WriteByte('*')
 		return nil
 	}
 
 	for i, col := range s.cols {
 		if i > 0 {
-			sb.WriteString(", ")
+			s.sb.WriteString(", ")
 		}
 
 		switch c := col.(type) {
@@ -166,21 +162,21 @@ func (s *Selector[T]) buildColumns() error {
 			}
 		case Aggregate:
 			// 聚合函数名
-			sb.WriteString(c.fn)
-			sb.WriteByte('(')
+			s.sb.WriteString(c.fn)
+			s.sb.WriteByte('(')
 			err := s.buildColumn(Column{name: c.arg})
 			if err != nil {
 				return err
 			}
-			sb.WriteByte(')')
+			s.sb.WriteByte(')')
 			// 聚合函数本身的别名
 			if c.alias != "" {
-				sb.WriteString(" AS `")
-				sb.WriteString(c.alias)
-				sb.WriteByte('`')
+				s.sb.WriteString(" AS `")
+				s.sb.WriteString(c.alias)
+				s.sb.WriteByte('`')
 			}
 		case RawExpr:
-			sb.WriteString(c.raw)
+			s.sb.WriteString(c.raw)
 			s.addArg(c.args...)
 
 		}

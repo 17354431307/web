@@ -332,7 +332,9 @@ func TestSelector_Get(t *testing.T) {
 
 func memoryDB(t *testing.T) *DB {
 	dsn := "file:test.db?cache=shared&mode=memory"
-	db, err := Open("sqlite3", dsn)
+	db, err := Open("sqlite3", dsn,
+		// 仅仅用于单元测试，不会发起真的查询
+		DBWithDialect(DialectMySQL))
 	assert.NoError(t, err)
 	return db
 }

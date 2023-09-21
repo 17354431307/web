@@ -34,6 +34,11 @@ func NewErrUnknowField(name string) error {
 func NewErrInvalidTagContext(pair string) error {
 	return fmt.Errorf("orm: 非法标签值 %s", pair)
 }
+
 func NewErrUnknowFieldColumn(name string) error {
 	return fmt.Errorf("orm: 未知列 %s", name)
+}
+
+func NewErrUnsupportAssignable(expr any) error {
+	return fmt.Errorf("orm: 不支持的赋值表达式类型 %v", expr)
 }

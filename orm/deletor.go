@@ -2,7 +2,6 @@ package orm
 
 import (
 	model2 "github.com/Moty1999/web/orm/model"
-	"strings"
 )
 
 type Deletor[T any] struct {
@@ -30,9 +29,9 @@ func (d *Deletor[T]) Where(ps ...Predicate) *Deletor[T] {
 }
 
 func (d *Deletor[T]) Build() (*Query, error) {
-	if d.sb == nil {
-		d.sb = &strings.Builder{}
-	}
+	//if d.sb == nil {
+	//	d.sb = &strings.Builder{}
+	//}
 
 	var err error
 	d.model, err = d.db.r.Get(new(T))
