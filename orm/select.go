@@ -36,7 +36,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	s.sb.WriteString("SELECT ")
 
 	err = s.buildColumns()

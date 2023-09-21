@@ -7,6 +7,72 @@ import (
 	"testing"
 )
 
+func TestInserter_SQLite_upsert(t *testing.T) {
+	db := memoryDB(t, DBWithDialect(DialectSQLite))
+	testCases := []struct {
+		name      string
+		i         QueryBuilder
+		wantErr   error
+		wantQuery *Query
+	}{
+		{
+			name: "upsert-update value",
+			i: NewInserter[TestModel](db).Values(&TestModel{
+				Id:        12,
+				FirstName: "Tom",
+				Age:       18,
+				LastName:  &sql.NullString{String: "Jerry", Valid: true},
+			}).OnDuplicateKey().ConflictColumns("Id").Update(Assign("FirstName", "Deng"), Assign("Age", 19)),
+			wantQuery: &Query{
+				SQL: "INSERT INTO `test_model`(`id`,`first_name`,`age`,`last_name`) VALUES (?,?,?,?) ON CONFLICT(`id`) DO UPDATE SET " +
+					"`first_name`=?,`age`=?;",
+				Args: []any{
+					int64(12),
+					"Tom",
+					int8(18),
+					&sql.NullString{String: "Jerry", Valid: true},
+					"Deng",
+					19,
+				},
+			},
+		},
+		{
+			name: "upset-update column",
+			i: NewInserter[TestModel](db).Values(&TestModel{
+				Id:        12,
+				FirstName: "Tom",
+				Age:       18,
+				LastName:  &sql.NullString{String: "Jerry", Valid: true},
+			}, &TestModel{
+				Id:        13,
+				FirstName: "He",
+				Age:       19,
+				LastName:  &sql.NullString{String: "Wen", Valid: true},
+			}).OnDuplicateKey().ConflictColumns("FirstName", "LastName").Update(C("FirstName"), C("Age")),
+			wantQuery: &Query{
+				SQL: "INSERT INTO `test_model`(`id`,`first_name`,`age`,`last_name`) VALUES (?,?,?,?),(?,?,?,?) " +
+					"ON CONFLICT(`first_name`,`last_name`) DO UPDATE SET `first_name`=excluded.`first_name`,`age`=excluded.`age`;",
+				Args: []any{
+					int64(12), "Tom", int8(18), &sql.NullString{String: "Jerry", Valid: true},
+					int64(13), "He", int8(19), &sql.NullString{String: "Wen", Valid: true},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(*testing.T) {
+			q, err := tc.i.Build()
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+
+			assert.Equal(t, tc.wantQuery, q)
+		})
+	}
+}
+
 func TestInserter_Build(t *testing.T) {
 	db := memoryDB(t)
 	testCases := []struct {
