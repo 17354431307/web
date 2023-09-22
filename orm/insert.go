@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"context"
 	"github.com/Moty1999/web/orm/internal/errs"
 	"github.com/Moty1999/web/orm/model"
 	"reflect"
@@ -152,4 +153,19 @@ func (i *Inserter[T]) Build() (*Query, error) {
 
 	i.sb.WriteByte(';')
 	return &Query{SQL: i.sb.String(), Args: i.args}, nil
+}
+
+func (i *Inserter[T]) Exec(ctx context.Context) Result {
+	q, err := i.Build()
+	if err != nil {
+		return Result{
+			err: err,
+		}
+	}
+
+	res, err := i.db.db.ExecContext(ctx, q.SQL, q.Args...)
+	return Result{
+		err: err,
+		res: res,
+	}
 }
