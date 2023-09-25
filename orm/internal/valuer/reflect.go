@@ -11,7 +11,8 @@ type ReflectValue struct {
 	model *model.Model
 
 	// 对应 T 的指针
-	val any
+	//val any
+	val reflect.Value
 }
 
 var _ Creator = NewReflectValue
@@ -19,8 +20,23 @@ var _ Creator = NewReflectValue
 func NewReflectValue(model *model.Model, val any) Value {
 	return ReflectValue{
 		model: model,
-		val:   val,
+		val:   reflect.ValueOf(val).Elem(),
 	}
+}
+
+func (r ReflectValue) Field(name string) (any, error) {
+	// 检测 name 是否合法
+	//_, ok := r.val.Type().FieldByName(name)
+	//if !ok {
+	//	// 报错
+	//}
+
+	val := r.val.FieldByName(name)
+	//if val == (reflect.Value{}) {
+	//	// 报错
+	//}
+
+	return val.Interface(), nil
 }
 
 func (r ReflectValue) SetColumns(rows *sql.Rows) error {

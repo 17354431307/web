@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"testing"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Moty1999/web/orm/internal/errs"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestInserter_SQLite_upsert(t *testing.T) {

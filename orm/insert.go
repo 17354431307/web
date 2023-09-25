@@ -2,9 +2,9 @@ package orm
 
 import (
 	"context"
+
 	"github.com/Moty1999/web/orm/internal/errs"
 	"github.com/Moty1999/web/orm/model"
-	"reflect"
 )
 
 type OnUpsertBuilder[T any] struct {
@@ -126,10 +126,12 @@ func (i *Inserter[T]) Build() (*Query, error) {
 
 	// 预估的参数数量是：我有多少行乘以我有多少个字段
 	i.args = make([]any, 0, len(i.values)*len(fields))
-	for j, val := range i.values {
+	for j, v := range i.values {
 		if j > 0 {
 			i.sb.WriteByte(',')
 		}
+
+		val := i.db.creator(i.model, v)
 		i.sb.WriteByte('(')
 		for idx, field := range fields {
 			if idx > 0 {
@@ -138,7 +140,10 @@ func (i *Inserter[T]) Build() (*Query, error) {
 			i.sb.WriteByte('?')
 
 			// 把参数读出来
-			arg := reflect.ValueOf(val).Elem().FieldByName(field.GoName).Interface()
+			arg, err := val.Field(field.GoName)
+			if err != nil {
+				return nil, err
+			}
 			i.args = append(i.args, arg)
 		}
 		i.sb.WriteByte(')')

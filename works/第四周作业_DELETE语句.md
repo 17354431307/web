@@ -60,13 +60,13 @@ DELETE [LOW_PRIORITY] [QUICK] [IGNORE] FROM tal_name [[AS]tab_alias]
 
 默认情况下，SQLite 的语法：
 
-![image-20230901205500883](./assets/image-20230901205500883.png)
+![image-20230901205500883](../assets/image-20230901205500883.png)
 
 可以看到，和 MySQL 比起来，它不支持 `LIMIT`，也不支持 `ORDER BY`，但是支持一个 `returning clause`。
 
 但是如果 SQLite 编译的时候开启了 `DELETE LIMIT`，那么它的语法形态就是：
 
-![ ](./assets/image-20230901205619389.png)
+![ ](../assets/image-20230901205619389.png)
 
 可以看到，它不仅仅支持 `LIMIT` 和 `ORDER BY`，还支持了 `OFFSET`。
 
@@ -74,7 +74,7 @@ DELETE [LOW_PRIORITY] [QUICK] [IGNORE] FROM tal_name [[AS]tab_alias]
 
 而 `returning-clause` 的特性则是返回被删除的数据（或者部分列）。
 
-![image-20230901221431528](./assets/image-20230901221431528.png)
+![image-20230901221431528](../assets/image-20230901221431528.png)
 
 ```sql
 delete from myTable returning *
