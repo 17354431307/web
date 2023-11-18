@@ -16,23 +16,32 @@ type Selector[T any] struct {
 	builder
 	table string
 	where []Predicate
-	db    *DB
-	cols  []Selectable
+
+	cols    []Selectable
+	groupBy []Column
+	having  []Predicate
+	offset  int
+	limit   int
+	orderBy []OrderBy
+
+	sess Session
 }
 
-func NewSelector[T any](db *DB) *Selector[T] {
+func NewSelector[T any](sess Session) *Selector[T] {
+	c := sess.getCore()
 	return &Selector[T]{
 		builder: builder{
-			dialect: db.dialect,
-			quoter:  db.dialect.quoter(),
+			core:   c,
+			quoter: c.dialect.quoter(),
 		},
-		db: db,
+
+		sess: sess,
 	}
 }
 
 func (s *Selector[T]) Build() (*Query, error) {
 	var err error
-	s.model, err = s.db.r.Get(new(T))
+	s.model, err = s.r.Get(new(T))
 	if err != nil {
 		return nil, err
 	}
@@ -64,15 +73,57 @@ func (s *Selector[T]) Build() (*Query, error) {
 		s.sb.WriteString(s.table)
 	}
 
+	// 构造 where 部分
 	if len(s.where) > 0 {
 		s.sb.WriteString(" WHERE ")
 		p := s.where[0]
 		for i := 1; i < len(s.where); i++ {
 			p = p.And(s.where[i])
 		}
-		if err := s.buildExpression(p); err != nil {
+		if err = s.buildExpression(p); err != nil {
 			return nil, err
 		}
+	}
+
+	// 构造 group by 部分
+	if len(s.groupBy) > 0 {
+		s.sb.WriteString(" GROUP BY ")
+		for i, c := range s.groupBy {
+			if i > 0 {
+				s.sb.WriteByte(',')
+			}
+			if err = s.buildColumn(c); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// 构建 having 部分
+	if len(s.having) > 0 {
+		s.sb.WriteString(" HAVING")
+		if err = s.buildPredicates(s.having, s.model); err != nil {
+			return nil, err
+		}
+	}
+
+	// 构建 order by 部分
+	if len(s.orderBy) > 0 {
+		s.sb.WriteString(" ORDER BY ")
+		if err = s.buildOrderBy(); err != nil {
+			return nil, err
+		}
+	}
+
+	// 构建 limit 部分
+	if s.limit > 0 {
+		s.sb.WriteString(" LIMIT ?")
+		s.addArg(s.limit)
+	}
+
+	// 构建 offset 部分
+	if s.offset > 0 {
+		s.sb.WriteString(" OFFSET ?")
+		s.addArg(s.offset)
 	}
 
 	s.sb.WriteByte(';')
@@ -264,9 +315,8 @@ func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 		return nil, err
 	}
 
-	db := s.db.db
 	// 在这里，就是要发起查询，并且处理结果集
-	rows, err := db.QueryContext(ctx, query.SQL, query.Args...)
+	rows, err := s.sess.queryContext(ctx, query.SQL, query.Args...)
 	// 这个是查询错误
 	if err != nil {
 		return nil, err
@@ -280,7 +330,7 @@ func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 	}
 
 	tp := new(T)
-	val := s.db.creator(s.model, tp)
+	val := s.creator(s.model, tp)
 
 	err = val.SetColumns(rows)
 	if err != nil {
@@ -298,9 +348,8 @@ func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 		return nil, err
 	}
 
-	db := s.db.db
 	// 在这里，就是要发起查询，并且处理结果集
-	rows, err := db.QueryContext(ctx, query.SQL, query.Args)
+	rows, err := s.sess.queryContext(ctx, query.SQL, query.Args)
 	if err != nil {
 		return nil, err
 	}
@@ -329,4 +378,64 @@ func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 func (s *Selector[T]) Select(cols ...Selectable) *Selector[T] {
 	s.cols = cols
 	return s
+}
+
+// GroupBy 设置 group by 子句
+func (s *Selector[T]) GroupBy(cols ...Column) *Selector[T] {
+	s.groupBy = cols
+	return s
+}
+
+func (s *Selector[T]) Having(ps ...Predicate) *Selector[T] {
+	s.having = ps
+	return s
+}
+
+func (s *Selector[T]) Offset(offset int) *Selector[T] {
+	s.offset = offset
+	return s
+}
+
+func (s *Selector[T]) Limit(limit int) *Selector[T] {
+	s.limit = limit
+	return s
+}
+
+func (s *Selector[T]) OrderBy(orderBys ...OrderBy) *Selector[T] {
+	s.orderBy = orderBys
+	return s
+}
+
+func (s *Selector[T]) buildOrderBy() error {
+	for idx, ob := range s.orderBy {
+		if idx > 0 {
+			s.sb.WriteByte(',')
+		}
+		err := s.buildColumn(Column{name: ob.col})
+		if err != nil {
+			return err
+		}
+		s.sb.WriteByte(' ')
+		s.sb.WriteString(ob.order)
+	}
+	return nil
+}
+
+type OrderBy struct {
+	col   string
+	order string
+}
+
+func Asc(col string) OrderBy {
+	return OrderBy{
+		col:   col,
+		order: "ASC",
+	}
+}
+
+func Desc(col string) OrderBy {
+	return OrderBy{
+		col:   col,
+		order: "DESC",
+	}
 }

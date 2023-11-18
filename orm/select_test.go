@@ -338,3 +338,196 @@ func memoryDB(t *testing.T, opts ...DBOption) *DB {
 	assert.NoError(t, err)
 	return db
 }
+
+func TestSelector_GroupBy(t *testing.T) {
+	db := memoryDB(t)
+	testCases := []struct {
+		name      string
+		q         QueryBuilder
+		wantQuery *Query
+		wantErr   error
+	}{
+		// 调用了, 但是啥也没传
+		{
+			name: "none",
+			q:    NewSelector[TestModel](db).GroupBy(),
+			wantQuery: &Query{
+				SQL: "SELECT * FROM `test_model`;",
+			},
+		},
+		// 单个
+		{
+			name: "single",
+			q:    NewSelector[TestModel](db).GroupBy(C("Age")),
+			wantQuery: &Query{
+				SQL: "SELECT * FROM `test_model` GROUP BY `age`;",
+			},
+		},
+		// 多个
+		{
+			name: "multiple",
+			q:    NewSelector[TestModel](db).GroupBy(C("Age"), C("FirstName")),
+			wantQuery: &Query{
+				SQL: "SELECT * FROM `test_model` GROUP BY `age`,`first_name`;",
+			},
+		},
+		// 不存在
+		{
+			name:    "invalid column",
+			q:       NewSelector[TestModel](db).GroupBy(C("Invalid")),
+			wantErr: errs.NewErrUnknowField("Invalid"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := tc.q.Build()
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			assert.Equal(t, tc.wantQuery, q)
+		})
+	}
+}
+
+func TestSelector_Having(t *testing.T) {
+	db := memoryDB(t)
+	testCases := []struct {
+		name      string
+		q         QueryBuilder
+		wantQuery *Query
+		wantErr   error
+	}{
+		// 调用了, 但是啥也没传
+		{
+			name: "none",
+			q:    NewSelector[TestModel](db).GroupBy(C("Age")).Having(),
+			wantQuery: &Query{
+				SQL: "SELECT * FROM `test_model` GROUP BY `age`;",
+			},
+		},
+		// 单个
+		{
+			name: "single",
+			q:    NewSelector[TestModel](db).GroupBy(C("Age")).Having(C("FirstName").Eq("Xiao")),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` GROUP BY `age` HAVING `first_name` = ?;",
+				Args: []any{"Xiao"},
+			},
+		},
+		// 多个
+		{
+			name: "multiple",
+			q: NewSelector[TestModel](db).GroupBy(C("Age")).Having(
+				C("FirstName").Eq("Xiao"),
+				C("LastName").Eq("Wen"),
+			),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` GROUP BY `age` HAVING ( `first_name` = ? ) AND ( `last_name` = ? );",
+				Args: []any{"Xiao", "Wen"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := tc.q.Build()
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			assert.Equal(t, tc.wantQuery, q)
+		})
+	}
+}
+
+func TestSelector_LimitOffset(t *testing.T) {
+	db := memoryDB(t)
+
+	testCases := []struct {
+		name      string
+		q         QueryBuilder
+		wantQuery *Query
+		wantErr   error
+	}{
+		{
+			name: "offset only",
+			q:    NewSelector[TestModel](db).Offset(10),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` OFFSET ?;",
+				Args: []any{10},
+			},
+		},
+		{
+			name: "limit only",
+			q:    NewSelector[TestModel](db).Limit(10),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` LIMIT ?;",
+				Args: []any{10},
+			},
+		},
+		{
+			name: "limit offset",
+			q:    NewSelector[TestModel](db).Limit(20).Offset(10),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model` LIMIT ? OFFSET ?;",
+				Args: []any{20, 10},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := tc.q.Build()
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			assert.Equal(t, tc.wantQuery, q)
+		})
+	}
+}
+
+func TestSelector_OrderBy(t *testing.T) {
+	db := memoryDB(t)
+
+	testCases := []struct {
+		name      string
+		q         QueryBuilder
+		wantQuery *Query
+		wantErr   error
+	}{
+
+		{
+			name: "column",
+			q:    NewSelector[TestModel](db).OrderBy(Asc("Age")),
+			wantQuery: &Query{
+				SQL: "SELECT * FROM `test_model` ORDER BY `age` ASC;",
+			},
+		},
+		{
+			name: "columns",
+			q:    NewSelector[TestModel](db).OrderBy(Asc("Age"), Desc("Id")),
+			wantQuery: &Query{
+				SQL: "SELECT * FROM `test_model` ORDER BY `age` ASC,`id` DESC;",
+			},
+		},
+		{
+			name:    "invalid column",
+			q:       NewSelector[TestModel](db).OrderBy(Asc("Invalid")),
+			wantErr: errs.NewErrUnknowField("Invalid"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := tc.q.Build()
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			assert.Equal(t, tc.wantQuery, q)
+		})
+	}
+}

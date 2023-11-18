@@ -7,11 +7,10 @@ import (
 )
 
 type builder struct {
-	sb      strings.Builder
-	args    []any
-	model   *model.Model
-	dialect Dialect
-	quoter  byte
+	core
+	sb     strings.Builder
+	args   []any
+	quoter byte
 }
 
 func (b *builder) quote(name string) {
@@ -41,7 +40,7 @@ func (b *builder) buildPredicates(ps []Predicate, m *model.Model) error {
 
 	p := ps[0]
 	for i := 1; i < len(ps); i++ {
-		p.And(ps[i])
+		p = p.And(ps[i])
 	}
 
 	return b.buildExpression(p, m)

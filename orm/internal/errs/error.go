@@ -21,6 +21,10 @@ func NewErrUnsupportedExpressionV1(expr any) error {
 	return fmt.Errorf("%w %v", ErrUnsupportedExpression, expr)
 }
 
+func NewErrFailedToRollbackTx(bizErr error, rbErr error, paniced bool) error {
+	return fmt.Errorf("orm: 事务闭包回滚失败, 业务错误: %w, 回滚错误: %s, 是否panic: %t", bizErr, rbErr, paniced)
+}
+
 // @ErrUnsupportedExpression 40001 原因是你输入了乱七八糟的类型
 // 解决方案: 使用正确的类型
 func NewErrUnsupportedExpression(expr any) error {
